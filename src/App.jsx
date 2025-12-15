@@ -24,7 +24,7 @@ const api = {
 // ==========================================
 // UTILS
 // ==========================================
-const getCleanImageUrl = (url, size = 'w1920') => {
+const getCleanImageUrl = (url) => {
     if (!url || typeof url !== 'string') return '';
     const u = url.trim();
     if (u.includes('drive.google.com') || u.includes('docs.google.com')) {
@@ -39,7 +39,7 @@ const getCleanImageUrl = (url, size = 'w1920') => {
              const match = u.match(/[-\w]{25,}/);
              if (match && match[0]) id = match[0];
         }
-        if (id) return `https://drive.google.com/thumbnail?id=${id}&sz=${size}`; // รองรับการปรับขนาด
+        if (id) return `https://drive.google.com/thumbnail?id=${id}&sz=w1920`;
     }
     return u;
 };
@@ -787,6 +787,7 @@ function App() {
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     const load = async () => {
+        // 1. ลองโหลดจาก Cache ก่อน
         const cached = localStorage.getItem('phukhamData');
         if (cached) { 
             try { 
@@ -858,7 +859,7 @@ function App() {
             <div>
                 <h3 className="text-xl font-bold text-slate-700 mb-2">กำลังเชื่อมต่อฐานข้อมูล...</h3>
                 <p className="text-slate-500 text-sm">กำลังโหลดข้อมูลจาก Google Cloud</p>
-                <button onClick={()=>{localStorage.removeItem('phukhamData'); window.location.reload()}} className="mt-8 text-xs text-gray-400 hover:text-red-500 underline">ล้างแคชและโหลดใหม่</button>
+                {/* ลบปุ่มล้างแคชออกแล้วครับ */}
             </div>
         </div>
     );
