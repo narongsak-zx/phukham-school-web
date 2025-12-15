@@ -5,19 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>โรงเรียนพุขามครุฑมณีอุทิศ</title>
     
-    <!-- ฟอนต์และไอคอน ตามต้นฉบับ -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ฟอนต์ Sarabun และไอคอน -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- สังเกตนะครับ: ผมเอา Script Tailwind, React, Babel ออกหมดแล้ว เพราะ Vite จัดการให้แล้ว -->
   </head>
   <body>
-    <!-- Ribbon: Corrected URL -->
+    <!-- ริบบิ้นไว้อาลัย -->
     <img src="https://raw.githubusercontent.com/KongNontawatDev/Black-Mourning-Ribbon/2150640c0e623c7fbcca07024287b597f7999a84/ribbon_top_right.png" 
-     alt="Black mourning ribbon for websites, top right corner" 
+     alt="Black mourning ribbon" 
      style="position:fixed; top:0; right:0; width:70px; opacity:0.9; z-index:9999; pointer-events:none;"
      onError="this.src='https://raw.githubusercontent.com/Kaiat/ribbon/master/black-ribbon-top-right.png';">
 
     <div id="root"></div>
+    
+    <!-- จุดสำคัญ: เรียกใช้ไฟล์ main.jsx ที่เราสร้างไว้ -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
