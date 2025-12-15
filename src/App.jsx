@@ -27,7 +27,6 @@ const api = {
 const getCleanImageUrl = (url) => {
     if (!url) return '';
     const u = url.trim();
-    // Optimization: ใช้ Thumbnail จาก Google Drive เพื่อโหลดเร็วขึ้น
     if (u.includes('drive.google.com') || u.includes('docs.google.com')) {
         let id = '';
         const parts = u.split(/\/d\//);
@@ -314,27 +313,462 @@ const Footer = ({ schoolName, schoolNameEN, schoolAddress, schoolPhone, fbName, 
     );
 };
 
-// ... AdminPanel (คุณใช้ตัวเต็มที่ให้ไปก่อนหน้านี้ได้เลยครับ ตรงนี้ผมละไว้เพื่อความกระชับ) ...
-// ให้เอา AdminPanel ตัวเดิมมาวางตรงนี้นะครับ
-
 const AdminPanel = ({ data, reload, onLogout }) => {
-    // ... Copy AdminPanel code from previous complete version ...
-    // เพื่อให้ทำงานได้ ผมใส่ Placeholder ไว้ ถ้าคุณมีโค้ด AdminPanel อยู่แล้ว แปะทับได้เลย
-    // หรือถ้าต้องการให้ผม Gen ให้เต็มๆ อีกรอบ บอกได้ครับ
-    return <div className="p-8">Admin Panel Placeholder (Please paste full code here) <button onClick={onLogout}>Logout</button></div>;
+    const [tab, setTab] = useState(() => {
+        return sessionStorage.getItem('phukham_admin_tab') || 'News';
+    });
+
+    useEffect(() => {
+        sessionStorage.setItem('phukham_admin_tab', tab);
+    }, [tab]);
+
+    const [editItem, setEditItem] = useState(null);
+    const [form, setForm] = useState({});
+    
+    const getConfig = (key) => data.Config.find(c => c.Key === key)?.Value || '';
+
+    const [settingsForm, setSettingsForm] = useState({ 
+        SchoolLogo: '', 
+        SchoolName: '',
+        SchoolNameEN: '',
+        SchoolAddress: '',
+        SchoolPhone: '', 
+        FacebookName: '',
+        FacebookURL: '',
+        DefaultNewsImage: '' 
+    });
+
+    const labelMap = { 
+        'Title': 'หัวข้อ / ชื่อ', 
+        'Content': 'เนื้อหา (HTML/Embed)', 
+        'ImageURL': 'ลิงก์รูปภาพ (URL)', 
+        'PDF_URL': 'ลิ้งก์ PDF (Google Drive)',
+        'Link_URL': 'ลิงก์ปุ่มกด (External)',
+        'Link_Label': 'ข้อความบนปุ่มกด',
+        'Category': 'หมวดหมู่', 
+        'Name': 'ชื่อ-นามสกุล', 
+        'Position': 'ตำแหน่ง', 
+        'Group': 'กลุ่มสาระ / ฝ่าย', 
+        'Caption': 'คำบรรยายภาพ', 
+        'Active': 'แสดงผล (TRUE/FALSE)', 
+        'Value': 'ค่าที่กำหนด', 
+        'Label': 'ชื่อเมนู', 
+        'Type': 'ประเภทเมนู', 
+        'ID': 'รหัสอ้างอิง', 
+        'PageKey': 'รหัสหน้า', 
+        'MenuCategory': 'แสดงในเมนูหลัก', 
+        'Order': 'ลำดับการแสดงผล',
+        'PageLabel': 'ชื่อเมนูย่อย (ใน Navbar)' 
+    };
+    const getLabel = (key) => labelMap[key] || key;
+    
+    const imageHints = {
+        'Banners': 'แนะนำ 1920 x 800 px (แนวนอน)',
+        'Newsletters': 'แนะนำ 1414 x 2000 px (แนวตั้ง A4)',
+        'News': 'แนะนำ 1920 x 1080 px (16:9) หรือตามความเหมาะสม',
+        'Personnel': 'แนะนำ 500 x 500 px (สี่เหลี่ยมจัตุรัส)',
+        'Pages': 'แนะนำ 2000 x 1414 px (แนวนอน A4) หรือตามความเหมาะสม',
+        'Menus': 'แนะนำ 1280 x 720 px (สำหรับ Header หน้า Page)'
+    };
+
+    const handleAddNew = () => {
+        setEditItem({ _isNew: true });
+        let initialForm = { Active: 'TRUE' };
+        if (tab === 'News') {
+            const defaultImg = getConfig('DefaultNewsImage');
+            if (defaultImg) initialForm.ImageURL = defaultImg;
+        }
+        setForm(initialForm); 
+    };
+
+    const handleEdit = (item) => {
+        setEditItem(item);
+        let initialForm = { ...item };
+
+        if (tab === 'Menus' && item.Type === 'page') {
+            const linkedPage = data.Pages.find(p => p.MenuCategory === item.ID);
+            if (linkedPage) {
+                initialForm = {
+                    ...initialForm,
+                    _pageKey: linkedPage.PageKey,
+                    _pageTitle: linkedPage.Title,
+                    _pageContent: linkedPage.Content,
+                    _pageImage: linkedPage.ImageURL,
+                    _pageLabel: linkedPage.PageLabel 
+                };
+            } else {
+                initialForm = {
+                    ...initialForm,
+                    _pageTitle: item.Label,
+                    _pageContent: '',
+                    _pageImage: '',
+                    _pageLabel: ''
+                };
+            }
+        }
+
+        setForm(initialForm);
+    };
+
+    const handleSave = async (e) => { 
+        e.preventDefault(); 
+        if(!confirm('ยืนยันการบันทึก?')) return; 
+        
+        try {
+            if (tab === 'Settings') { 
+                const updates = [
+                    { Key: 'SchoolLogo', Value: settingsForm.SchoolLogo },
+                    { Key: 'SchoolName', Value: settingsForm.SchoolName },
+                    { Key: 'SchoolNameEN', Value: settingsForm.SchoolNameEN },
+                    { Key: 'SchoolAddress', Value: settingsForm.SchoolAddress },
+                    { Key: 'SchoolPhone', Value: settingsForm.SchoolPhone },
+                    { Key: 'FacebookName', Value: settingsForm.FacebookName },
+                    { Key: 'FacebookURL', Value: settingsForm.FacebookURL },
+                    { Key: 'DefaultNewsImage', Value: settingsForm.DefaultNewsImage } 
+                ];
+
+                await Promise.all(updates.map(item => 
+                        api.post({ action: 'save', sheet: 'Config', data: item })
+                ));
+                
+            } else if (tab === 'Menus') {
+                const menuPayload = {
+                    ID: editItem._isNew ? form.ID : form.ID,
+                    Label: form.Label,
+                    Type: form.Type,
+                    Order: form.Order
+                };
+                await api.post({ action: 'save', sheet: 'Menus', data: menuPayload });
+
+                if (form.Type === 'page') {
+                    const pagePayload = {
+                        PageKey: form._pageKey || ('page_' + Date.now()), 
+                        Title: form._pageTitle || form.Label,
+                        Content: form._pageContent || '',
+                        ImageURL: form._pageImage || '',
+                        MenuCategory: form.ID, 
+                        Order: 1,
+                        PageLabel: form._pageLabel || '' 
+                    };
+                    await api.post({ action: 'save', sheet: 'Pages', data: pagePayload });
+                }
+
+            } else { 
+                const idToUse = editItem._isNew ? form.ID : (editItem.ID || editItem.PageKey);
+                let payload = { ...form, ID: idToUse };
+                if (tab === 'Pages') { payload.PageKey = idToUse; }
+                
+                if (tab === 'News' && !payload.Date) {
+                    payload.Date = new Date();
+                }
+
+                await api.post({ action: 'save', sheet: tab, data: payload }); 
+            } 
+            
+            alert('บันทึกเรียบร้อย'); 
+            setEditItem(null); 
+            setForm({}); 
+            reload(); 
+        } catch (err) {
+            alert('เกิดข้อผิดพลาด: ' + err.toString());
+        }
+    };
+
+    const handleDelete = async (id) => { 
+        let confirmMessage = 'ยืนยันการลบรายการนี้? การกระทำนี้ไม่สามารถย้อนกลับได้';
+        let relatedPagesToDelete = [];
+
+        if (tab === 'Menus') {
+            const menuItem = data.Menus.find(m => m.ID === id);
+            if (menuItem && menuItem.Type !== 'link') {
+                relatedPagesToDelete = data.Pages.filter(p => p.MenuCategory === id);
+                if (relatedPagesToDelete.length > 0) {
+                    confirmMessage = `คำเตือน! เมนูนี้มีเนื้อหาหน้าย่อย ${relatedPagesToDelete.length} รายการ\nหากลบเมนูนี้ เนื้อหาทั้งหมดจะถูกลบไปด้วย\n\nยืนยันการลบทั้งหมดหรือไม่?`;
+                }
+            }
+        }
+
+        if(confirm(confirmMessage)) { 
+            try {
+                if (relatedPagesToDelete.length > 0) {
+                    for (const page of relatedPagesToDelete) {
+                        await api.post({ action: 'delete', sheet: 'Pages', id: page.PageKey });
+                    }
+                }
+                await api.post({ action: 'delete', sheet: tab, id }); 
+                alert('ลบข้อมูลเรียบร้อย');
+                setEditItem(null); 
+                reload(); 
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการลบ: ' + err.toString());
+            }
+        } 
+    };
+    
+    const openSettings = () => { 
+        setSettingsForm({ 
+            SchoolLogo: getConfig('SchoolLogo'), 
+            SchoolName: getConfig('SchoolName'),
+            SchoolNameEN: getConfig('SchoolNameEN'), 
+            SchoolAddress: getConfig('SchoolAddress'),
+            SchoolPhone: getConfig('SchoolPhone'),
+            FacebookName: getConfig('FacebookName'),
+            FacebookURL: getConfig('FacebookURL'),
+            DefaultNewsImage: getConfig('DefaultNewsImage')
+        }); 
+        setEditItem({ settings: true }); 
+    }
+    
+    const menuTabs = { 'News':'ข่าวประชาสัมพันธ์', 'Newsletters': 'จดหมายข่าว', 'Personnel':'บุคลากร', 'Banners':'สไลด์', 'Pages':'เนื้อหาหน้าย่อย', 'Menus':'เมนูหลัก', 'Settings':'ระบบ' };
+    
+    const getGroupedPages = () => { 
+        if (tab !== 'Pages') return null; 
+        const groups = {}; 
+        data.Menus.filter(m => m.Type === 'dropdown' || m.Type === 'page').forEach(m => groups[m.ID] = { label: `${m.Label} (${m.Type})`, items: [] }); 
+        groups['other'] = { label: 'หน้าลอย / ไม่ระบุหมวดหมู่', items: [] }; 
+        data.Pages.forEach(p => { 
+            if (p.MenuCategory && groups[p.MenuCategory]) groups[p.MenuCategory].items.push(p); 
+            else groups['other'].items.push(p); 
+        }); 
+        return groups; 
+    };
+
+    const getSortedAdminData = (items) => {
+        if(!items) return [];
+        return [...items].sort((a,b) => {
+            const orderA = Number(a.Order) || 0;
+            const orderB = Number(b.Order) || 0;
+
+            if (tab === 'News' || tab === 'Newsletters') {
+                if(orderA !== orderB) return orderB - orderA;
+                if(tab === 'News' && a.Date && b.Date) return new Date(b.Date) - new Date(a.Date);
+                return 0;
+            } else {
+                return orderA - orderB;
+            }
+        });
+    };
+
+    const isDescendingTab = ['News', 'Newsletters'].includes(tab);
+
+    const getSortingMessage = (t) => {
+        if (['News', 'Newsletters'].includes(t)) return 'เรียงจาก มาก -> น้อย (เลขมากหรือล่าสุด ขึ้นก่อน)';
+        if (['Banners', 'Personnel', 'Menus', 'Pages'].includes(t)) return 'เรียงจาก น้อย -> มาก (เลข 1, 2, 3... ตามลำดับ)';
+        return '';
+    }
+
+    const insertLinkToContent = (fieldName = 'Content') => {
+        const url = prompt("ใส่ URL ที่ต้องการ (เช่น https://google.com):");
+        if (!url) return;
+        const text = prompt("ข้อความที่จะแสดง (ถ้าไม่ใส่จะใช้ URL):", url);
+        const linkHtml = `<a href="${url}" target="_blank" style="color:#2563eb; text-decoration:underline;">${text || url}</a>`;
+        setForm(prev => ({ ...prev, [fieldName]: (prev[fieldName] || "") + " " + linkHtml }));
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-50 z-[200] flex flex-col text-slate-800 font-sarabun text-base">
+            <header className="bg-white px-6 py-4 flex justify-between items-center shadow-sm z-10 border-b">
+                <div className="flex items-center gap-2"><div className="bg-primary text-white w-8 h-8 rounded flex items-center justify-center"><i className="fas fa-cog"></i></div><h2 className="font-bold text-lg text-primary">ระบบจัดการหลังบ้าน</h2></div>
+                <button onClick={onLogout} className="text-red-500 hover:text-red-700 text-sm font-bold"><i className="fas fa-sign-out-alt"></i> ออกจากระบบ</button>
+            </header>
+            <div className="flex flex-1 overflow-hidden">
+                <aside className="w-64 bg-white border-r hidden md:block p-4 space-y-1 overflow-y-auto">
+                    {['News', 'Newsletters', 'Personnel', 'Banners', 'Pages'].map(t => (<button key={t} onClick={()=>{setTab(t); setEditItem(null); setForm({});}} className={`w-full text-left px-4 py-3 rounded-lg text-sm transition ${tab===t ? 'bg-primary text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>{menuTabs[t]}</button>))}
+                    <div className="border-t my-2 pt-2"><button onClick={()=>{setTab('Menus'); setEditItem(null); setForm({});}} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition ${tab==='Menus' ? 'bg-primary text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>{menuTabs['Menus']}</button><button onClick={()=>{setTab('Settings'); openSettings();}} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition ${tab==='Settings' ? 'bg-primary text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>{menuTabs['Settings']}</button></div>
+                </aside>
+                <main className="flex-1 p-8 overflow-auto">
+                    <h2 className="text-2xl font-bold mb-4 text-primary">{menuTabs[tab]}</h2>
+                    {tab !== 'Settings' && (
+                        <div className="bg-blue-50 text-[#003366] p-3 rounded-lg mb-6 text-sm flex items-start gap-2 border border-blue-100 shadow-sm">
+                            <i className="fas fa-sort-amount-down mt-1"></i>
+                            <div><span className="font-bold">การเรียงลำดับ:</span> {getSortingMessage(tab)}</div>
+                        </div>
+                    )}
+                    {!['Settings'].includes(tab) && !editItem && (
+                        <button onClick={handleAddNew} className="bg-primary text-white px-5 py-2.5 rounded-lg shadow hover:opacity-90 transition flex items-center gap-2 mb-6"><i className="fas fa-plus-circle"></i> เพิ่มข้อมูลใหม่</button>
+                    )}
+
+                    {editItem && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                            <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-blue-100">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-xl text-primary">{tab==='Settings' ? 'ตั้งค่าระบบ' : (editItem._isNew ? 'เพิ่มข้อมูลใหม่' : 'แก้ไขข้อมูล')}</h3>
+                                    <button onClick={()=>setEditItem(null)} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times text-xl"></i></button>
+                                </div>
+                                <form onSubmit={handleSave} className="grid gap-5">
+                                    {tab === 'Settings' && <>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div><label className="text-sm font-bold text-gray-600 mb-1 block">ชื่อโรงเรียน (TH)</label><input className="w-full border p-3 rounded-lg" value={settingsForm.SchoolName} onChange={e=>setSettingsForm({...settingsForm, SchoolName: e.target.value})} /></div>
+                                            <div><label className="text-sm font-bold text-gray-600 mb-1 block">ชื่อโรงเรียน (EN)</label><input className="w-full border p-3 rounded-lg" value={settingsForm.SchoolNameEN} onChange={e=>setSettingsForm({...settingsForm, SchoolNameEN: e.target.value})} placeholder="Phukhamkrutmaneeuthit School" /></div>
+                                        </div>
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">เบอร์โทรศัพท์</label><input className="w-full border p-3 rounded-lg" value={settingsForm.SchoolPhone} onChange={e=>setSettingsForm({...settingsForm, SchoolPhone: e.target.value})} placeholder="เช่น 056-792781" /></div>
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">ที่อยู่</label><textarea rows="3" className="w-full border p-3 rounded-lg" value={settingsForm.SchoolAddress} onChange={e=>setSettingsForm({...settingsForm, SchoolAddress: e.target.value})} placeholder="ใส่ที่อยู่โรงเรียน..."></textarea></div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div><label className="text-sm font-bold text-gray-600 mb-1 block">ชื่อ Facebook</label><input className="w-full border p-3 rounded-lg" value={settingsForm.FacebookName} onChange={e=>setSettingsForm({...settingsForm, FacebookName: e.target.value})} placeholder="เช่น โรงเรียนพุขาม..." /></div>
+                                            <div><label className="text-sm font-bold text-gray-600 mb-1 block">URL Facebook</label><input className="w-full border p-3 rounded-lg" value={settingsForm.FacebookURL} onChange={e=>setSettingsForm({...settingsForm, FacebookURL: e.target.value})} placeholder="https://facebook.com/..." /></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-sm font-bold text-gray-600 mb-1 block">URL รูปภาพโลโก้ <span className="text-blue-500 font-normal text-xs ml-1">(แนะนำ 512x512)</span></label>
+                                                <input className="w-full border p-3 rounded-lg bg-gray-50" value={settingsForm.SchoolLogo} onChange={e=>setSettingsForm({...settingsForm, SchoolLogo: e.target.value})} />
+                                                {settingsForm.SchoolLogo && <img src={getCleanImageUrl(settingsForm.SchoolLogo)} className="h-10 mt-2 border p-1 rounded" onError={(e)=>e.target.style.display='none'}/>}
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-bold text-gray-600 mb-1 block">รูปภาพเริ่มต้นข่าว (Default News Image)</label>
+                                                <input className="w-full border p-3 rounded-lg bg-gray-50" value={settingsForm.DefaultNewsImage} onChange={e=>setSettingsForm({...settingsForm, DefaultNewsImage: e.target.value})} />
+                                                {settingsForm.DefaultNewsImage && <img src={getCleanImageUrl(settingsForm.DefaultNewsImage)} className="h-10 mt-2 border p-1 rounded" onError={(e)=>e.target.style.display='none'}/>}
+                                            </div>
+                                        </div>
+                                    </>} 
+                                    {tab !== 'Settings' && (
+                                        <div>
+                                            <label className="text-sm font-bold text-gray-600 mb-1 block">ลำดับการแสดงผล (ตัวเลข)</label>
+                                            <input type="number" className="w-full border p-3 rounded-lg" value={form.Order||''} onChange={e=>setForm({...form, Order: e.target.value})} placeholder="ใส่ตัวเลข เช่น 10, 9, 8..." />
+                                        </div>
+                                    )}
+                                    {tab === 'Menus' && <>
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">ID (ห้ามซ้ำ)</label><input className="w-full border p-3 rounded-lg bg-gray-50 disabled:text-gray-400" value={form.ID||''} onChange={e=>setForm({...form, ID: e.target.value})} disabled={!editItem._isNew} placeholder="เช่น menu_about" /></div>
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">ชื่อเมนู</label><input className="w-full border p-3 rounded-lg" value={form.Label||''} onChange={e=>setForm({...form, Label: e.target.value})} /></div>
+                                        <div>
+                                            <label className="text-sm font-bold text-gray-600 mb-1 block">ประเภท</label>
+                                            <select className="w-full border p-3 rounded-lg" value={form.Type||'link'} onChange={e=>setForm({...form, Type: e.target.value})}>
+                                                <option value="link">Link (กดแล้วไปหน้าแรก/หน้าอื่น)</option>
+                                                <option value="dropdown">Dropdown (มีเมนูย่อย)</option>
+                                                <option value="page">Page (หน้าเนื้อหาเดี่ยว)</option>
+                                            </select>
+                                        </div>
+
+                                        {form.Type === 'page' && (
+                                            <div className="mt-4 border-t-2 border-blue-100 pt-6 animate-fadeIn bg-blue-50 p-4 rounded-xl">
+                                                <h4 className="text-primary font-bold text-lg mb-4 flex items-center gap-2"><i className="fas fa-file-alt"></i> จัดการเนื้อหาของหน้านี้</h4>
+                                                
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <label className="text-sm font-bold text-gray-600 mb-1 block">หัวข้อในหน้าเนื้อหา</label>
+                                                        <input className="w-full border p-3 rounded-lg bg-white" value={form._pageTitle||''} onChange={e=>setForm({...form, _pageTitle: e.target.value})} placeholder="เช่น ประวัติโรงเรียน (ถ้าไม่ใส่จะใช้ชื่อเมนู)" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-sm font-bold text-gray-600 mb-1 block">รูปภาพหัวเรื่อง (URL)</label>
+                                                        <input className="w-full border p-3 rounded-lg bg-white" value={form._pageImage||''} onChange={e=>setForm({...form, _pageImage: e.target.value})} placeholder="URL รูปภาพ (ถ้ามี)" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <label className="text-sm font-bold text-gray-600 block">รายละเอียดเนื้อหา</label>
+                                                            <button type="button" onClick={() => insertLinkToContent('_pageContent')} className="text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 font-bold flex items-center gap-1"><i className="fas fa-link"></i> แทรกลิ้งก์</button>
+                                                        </div>
+                                                        <textarea className="w-full border p-3 rounded-lg h-64 font-mono text-sm bg-white" value={form._pageContent||''} onChange={e=>setForm({...form, _pageContent: e.target.value})} placeholder="ใส่เนื้อหา หรือ HTML Code ที่นี่..."></textarea>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>} 
+                                    {tab === 'News' && <>
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">หัวข้อข่าว</label><input className="w-full border p-3 rounded-lg" value={form.Title||''} onChange={e=>setForm({...form, Title: e.target.value})} placeholder="ใส่หัวข้อข่าวที่นี่..." /></div>
+                                        
+                                        <div>
+                                            <label className="text-sm font-bold text-gray-600 mb-1 block">ลิ้งก์ PDF (Google Drive) <span className="text-red-500 font-normal text-xs ml-2">(ถ้ามีจะโชว์แทนรูปภาพ)</span></label>
+                                            <input className="w-full border p-3 rounded-lg" value={form.PDF_URL||''} onChange={e=>setForm({...form, PDF_URL: e.target.value})} placeholder="https://drive.google.com/file/d/.../view" />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-sm font-bold text-gray-600 mb-1 block">ลิงก์ปุ่มกด (External Link)</label>
+                                                <input className="w-full border p-3 rounded-lg" value={form.Link_URL||''} onChange={e=>setForm({...form, Link_URL: e.target.value})} placeholder="https://..." />
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-bold text-gray-600 mb-1 block">ข้อความบนปุ่มกด</label>
+                                                <input className="w-full border p-3 rounded-lg" value={form.Link_Label||''} onChange={e=>setForm({...form, Link_Label: e.target.value})} placeholder="เช่น สมัครเรียนคลิกที่นี่ (ถ้าไม่ใส่จะใช้คำว่า 'ไปที่ลิงก์')" />
+                                            </div>
+                                        </div>
+
+                                        <div><div className="flex justify-between items-center mb-1"><label className="text-sm font-bold text-gray-600 block">เนื้อหา</label><button type="button" onClick={() => insertLinkToContent('Content')} className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 font-bold flex items-center gap-1"><i className="fas fa-link"></i> แทรกลิ้งก์</button></div><textarea className="w-full border p-3 rounded-lg h-48 font-mono text-sm" value={form.Content||''} onChange={e=>setForm({...form, Content: e.target.value})} placeholder="ใส่เนื้อหาข่าว หรือ HTML..."></textarea></div>
+                                    </>}
+                                    {tab === 'Newsletters' && (<div><label className="text-sm font-bold text-gray-600 mb-1 block">หัวข้อจดหมายข่าว</label><input className="w-full border p-3 rounded-lg" value={form.Title||''} onChange={e=>setForm({...form, Title: e.target.value})} placeholder="ใส่ชื่อจดหมายข่าว" /></div>)}
+                                    {tab === 'Pages' && <>
+                                        {editItem._isNew && <div><label className="text-sm font-bold text-gray-600 mb-1 block">PageKey (ห้ามซ้ำ)</label><input className="w-full border p-3 rounded-lg" value={form.ID||''} onChange={e=>setForm({...form, ID: e.target.value})} placeholder="เช่น page_history" /></div>}
+                                        
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">ชื่อเมนูย่อย (แสดงใน Navbar)</label><input className="w-full border p-3 rounded-lg bg-blue-50" value={form.PageLabel||''} onChange={e=>setForm({...form, PageLabel: e.target.value})} placeholder="หากปล่อยว่าง เมนูนี้จะแสดงเป็นช่องว่างเปล่า" /></div>
+                                        <div><label className="text-sm font-bold text-gray-600 mb-1 block">หัวข้อหน้า (แสดงในเนื้อหา)</label><input className="w-full border p-3 rounded-lg" value={form.Title||''} onChange={e=>setForm({...form, Title: e.target.value})} placeholder="เช่น ประวัติและความเป็นมา" /></div>
+                                        
+                                        <div>
+                                            <label className="text-sm font-bold text-gray-600 mb-1 block">เมนูหลัก (เชื่อมโยง)</label>
+                                            <select className="w-full border p-3 rounded-lg" value={form.MenuCategory||''} onChange={e=>setForm({...form, MenuCategory: e.target.value})}>
+                                                <option value="">-- ไม่แสดงในเมนู --</option>
+                                                {data.Menus.filter(m=>m.Type==='dropdown' || m.Type==='page').map(m => (
+                                                    <option key={m.ID} value={m.ID}>{m.Label} {m.Type === 'page' ? '(Page)' : ''}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </>} 
+                                    
+                                    {Object.keys(tab === 'Settings' ? {} : (editItem._isNew ? (data[tab][0] || {}) : editItem)).map(k => { 
+                                        if(['ID','Date','PageKey','Key','MenuCategory','Title','Label','Type','Order','_isNew','settings', 'PageLabel'].includes(k)) return null; 
+                                        if(k.startsWith('_page')) return null; 
+                                        if(tab === 'News' && (k === 'Content' || k === 'PDF_URL' || k === 'Link_URL' || k === 'Link_Label')) return null; 
+                                        return <div key={k}><label className="text-sm font-bold text-gray-600 mb-1 block">{getLabel(k)}{k === 'ImageURL' && imageHints[tab] && <span className="text-blue-500 font-normal text-xs ml-2">({imageHints[tab]})</span>}</label>{k === 'Content' ? <div className="space-y-1"><textarea className="w-full border p-3 rounded-lg h-48 font-mono text-sm" value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} placeholder="ใส่ข้อความ หรือ HTML"></textarea></div> : <input className="w-full border p-3 rounded-lg" value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} />}</div> 
+                                    })}
+                                    <div className="flex gap-4"><button type="submit" className="flex-1 bg-primary text-white py-3 rounded-lg font-bold shadow hover:opacity-90 transition">บันทึกข้อมูล</button>{!editItem._isNew && tab !== 'Settings' && (<button type="button" onClick={() => handleDelete(editItem.ID || editItem.PageKey)} className="bg-red-500 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-red-600 transition"><i className="fas fa-trash-alt mr-2"></i> ลบข้อมูล</button>)}</div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {tab !== 'Settings' && !editItem && (<div className="space-y-6">
+                        {tab === 'Pages' ? (Object.entries(getGroupedPages()).map(([key, group]) => (group.items.length > 0 && (<div key={key} className="bg-white rounded-xl border border-gray-200 overflow-hidden"><div className="bg-gray-100 px-5 py-3 font-bold text-gray-700 border-b flex justify-between"><span>{group.label}</span><span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-500">{group.items.length} รายการ</span></div><div className="divide-y">{group.items.map((item, i) => (<div key={i} className="p-4 flex justify-between items-center hover:bg-blue-50 transition">
+                        {/* UPDATE: แสดง PageLabel เป็นหลัก */}
+                        <div>
+                            <div className="font-bold text-slate-800">{item.PageLabel || <span className="text-gray-400 italic font-normal">(ไม่มีชื่อเมนู)</span>}</div>
+                            <div className="text-xs text-gray-500">หัวข้อ: {item.Title}</div>
+                        </div>
+                        <div className="flex items-center gap-2"><button onClick={()=>handleEdit(item)} className="text-blue-500 hover:text-blue-700 px-2"><i className="fas fa-edit fa-lg"></i></button><button onClick={()=>handleDelete(item.PageKey)} className="text-red-500 hover:text-red-700 px-2"><i className="fas fa-trash fa-lg"></i></button></div></div>))}</div></div>)))) 
+                        : 
+                        (<div className="grid gap-3">{getSortedAdminData(data[tab]).map((item,i) => (<div key={i} className="bg-white p-4 rounded-xl border border-gray-100 flex justify-between items-center hover:shadow-md transition"><div className="flex items-center gap-4">{item.ImageURL && 
+                            <img src={getCleanImageUrl(item.ImageURL.split(',')[0])} className="w-12 h-12 rounded-lg object-cover bg-gray-100" />}<div><div className="font-bold">{item.Title || item.Name || item.Caption || item.Label}</div><div className="text-xs text-gray-400">{item.Order ? `ลำดับ: ${item.Order} | ` : ''}{item.Category || item.MenuCategory || item.PageKey}</div></div></div><div className="flex items-center gap-2"><button onClick={()=>handleEdit(item)} className="text-blue-500 hover:text-blue-700 px-2"><i className="fas fa-edit fa-lg"></i></button><button onClick={()=>handleDelete(item.ID || item.PageKey)} className="text-red-500 hover:text-red-700 px-2"><i className="fas fa-trash fa-lg"></i></button></div></div>))}</div>)}
+                    </div>
+                    )}
+                </main>
+            </div>
+        </div>
+    );
 };
 
-
 // ==========================================
-// MAIN APP (Logic โหลดเร็ว)
+// MAIN APP
 // ==========================================
 
 function App() {
-    const [page, _setPage] = useState({ id: 'home' });
-    const setPage = (newPage) => { _setPage(newPage); const params = new URLSearchParams(); if (newPage.id) params.set('page', newPage.id); if (newPage.key) params.set('key', newPage.key); window.history.pushState(newPage, '', `${window.location.pathname}?${params.toString()}`); };
+    // 1. ระบบจดจำหน้า (State Initialization)
+    // ตรงนี้สำคัญมาก: เราบอกให้ React อ่าน URL ตั้งแต่เริ่มรันครั้งแรก
+    const [page, _setPage] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        const pId = params.get('page');
+        const key = params.get('key');
+        if (pId) {
+            return { id: pId, key: key };
+        }
+        return { id: 'home' };
+    });
+
+    const setPage = (newPage) => { 
+        _setPage(newPage); 
+        const params = new URLSearchParams(); 
+        if (newPage.id) params.set('page', newPage.id); 
+        if (newPage.key) params.set('key', newPage.key); 
+        
+        // อัปเดต URL บน Browser โดยไม่รีโหลดหน้า
+        window.history.pushState(newPage, '', `${window.location.pathname}?${params.toString()}`); 
+    };
 
     useEffect(() => {
-        const onPopState = (event) => { if (event.state) { _setPage(event.state); } else { const params = new URLSearchParams(window.location.search); _setPage({ id: params.get('page') || 'home', key: params.get('key') }); } };
+        const onPopState = (event) => { 
+            if (event.state) { 
+                _setPage(event.state); 
+            } else { 
+                // กรณี Back/Forward แล้วไม่มี State ให้เช็คจาก URL อีกรอบ
+                const params = new URLSearchParams(window.location.search); 
+                _setPage({ id: params.get('page') || 'home', key: params.get('key') }); 
+            } 
+        };
         window.addEventListener('popstate', onPopState);
         return () => window.removeEventListener('popstate', onPopState);
     }, []);
@@ -407,7 +841,6 @@ function App() {
                                 </div>
                             </>
                         )}
-                        {/* ... (ส่วนอื่นๆ คงเดิม) ... */}
                         {page.id === 'news' && <div className="content-container py-12"><h2 className="text-3xl font-bold text-center mb-10 text-primary">ข่าวสารทั้งหมด</h2><div className="grid md:grid-cols-3 gap-8">{sortedNews.map((n,i)=>(<NewsCard key={i} n={n} defaultImage={getConfig('DefaultNewsImage')} onClick={()=>setPage({id:'news_detail', key: n.ID, item: n})} />))}</div></div>}
                         {page.id === 'news_detail' && (()=>{ const newsItem = page.item || (data && data.News && page.key ? data.News.find(n => n.ID == page.key) : null); return newsItem ? <NewsDetail item={newsItem} defaultImage={getConfig('DefaultNewsImage')} onBack={()=>setPage({id: 'news'})} /> : <div className="p-12 text-center text-gray-500">Loading...</div> })()}
                         {page.id === 'page' && <div className="content-container py-12"><div className="bg-white p-12 rounded-3xl shadow-lg border border-gray-100 fade-in min-h-[600px]">{(() => { const p = data.Pages.find(x => x.PageKey === page.key) || {}; const pageImages = p.ImageURL ? p.ImageURL.split(',').map(url => url.trim()).filter(url => url) : []; return (<><h2 className="text-4xl font-bold text-primary mb-8 pb-4 border-b border-gray-200">{p.Title}</h2><div className="prose prose-lg max-w-none text-slate-700 leading-relaxed html-content" dangerouslySetInnerHTML={{__html: p.Content}} />{pageImages.length > 0 && (<div className="mt-10 flex flex-col items-center">{pageImages.map((imgUrl, idx) => (<img key={idx} src={getCleanImageUrl(imgUrl)} className="w-full h-auto block" style={{ margin: 0, padding: 0, display: 'block' }} />))}</div>)}</>); })()}</div></div>}
