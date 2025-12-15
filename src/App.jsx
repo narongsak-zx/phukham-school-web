@@ -233,7 +233,7 @@ const NewsDetail = ({ item, defaultImage, onBack }) => {
     return (
         <div className="w-full bg-white min-h-[calc(100vh-6rem)]">
             <div className="content-container py-12 fade-in">
-                <button onClick={onBack} className="mb-6 text-primary font-bold flex items-center gap-2 hover:underline"><i className="fas fa-arrow-left"></i> ย้อนกลับ</button>
+                {/* ปุ่มย้อนกลับถูกลบออกแล้วตามที่ขอ */}
                 <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
                     {hasImage && <div className="w-full flex justify-center bg-gray-100 border-b border-gray-100"><img src={imageUrl} className="w-full h-auto object-cover" style={{ maxHeight: '600px', width: 'auto', maxWidth: '100%' }} onError={(e)=>{e.target.onerror=null; e.target.src='https://via.placeholder.com/1280x720?text=No+Image';}} /></div>}
                     <div className="p-12 md:p-16 max-w-5xl mx-auto">
